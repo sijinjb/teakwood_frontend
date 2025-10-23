@@ -8,10 +8,16 @@ const ProductDetail = () => {
   const [product, setProduct] = useState(null);
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedColor, setSelectedColor] = useState("");
-  const [activeTab, setActiveTab] = useState("overview"); // overview | specs | features
+  const [activeTab, setActiveTab] = useState("overview"); // overview | specs | features | reviews
   const [loading, setLoading] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [wishlisted, setWishlisted] = useState(false);
+  const [copyStatus, setCopyStatus] = useState(""); // show copy feedback
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSuccess, setReviewSuccess] = useState("");
   const { id } = useParams();
 
   const fetchProduct = async () => {
@@ -38,7 +44,7 @@ const ProductDetail = () => {
   }, [product]);
 
   const handleBuyNowClick = () => {
-    const message = `I'm interested in purchasing:\n\nProduct: ${product?.name}\nQty: ${quantity}\nColor: ${selectedColor || "N/A"}\nLink: https://www.teakwoodfactory.com/product/${product?.uuid}`;
+    const message = `I'm interested in purchasing:\n\nProduct: ${product?.name}\nQty: ${quantity}\nColor: ${selectedColor || "N/A"}\nLink: ${getProductUrl()}`;
     const encodedMessage = encodeURIComponent(message);
     const phoneNumber = "918904088131";
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodedMessage}`;
@@ -52,6 +58,89 @@ const ProductDetail = () => {
   const toggleWishlist = () => {
     setWishlisted((s) => !s);
     // Optionally: send wishlist update to backend here
+  };
+
+  // helper: product URL (use canonical product page when possible)
+  const getProductUrl = () => {
+    if (product?.uuid) return `https://www.teakwoodfactory.com/product/${product.uuid}`;
+    return window.location.href;
+  };
+
+  // open WhatsApp share (no recipient) with prefilled message
+  const handleShareClick = () => {
+    const url = getProductUrl();
+    const message = `Check this product: ${product?.name}\n${url}`;
+    const encoded = encodeURIComponent(message);
+    const waUrl = `https://wa.me/?text=${encoded}`;
+    window.open(waUrl, "_blank");
+  };
+
+  // copy product link and show feedback
+  const handleCopyLink = async () => {
+    const url = getProductUrl();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopyStatus("Copied!");
+      setTimeout(() => setCopyStatus(""), 2500);
+    } catch (err) {
+      console.error("Copy failed", err);
+      setCopyStatus("Copy failed");
+      setTimeout(() => setCopyStatus(""), 2500);
+    }
+  };
+
+  // submit review to backend and refresh product reviews
+  const submitReview = async () => {
+    setReviewError("");
+    setReviewSuccess("");
+    if (!reviewRating || reviewRating < 1 || reviewRating > 5) {
+      setReviewError("Please select a rating (1-5).");
+      return;
+    }
+    if (!reviewComment || reviewComment.trim().length < 5) {
+      setReviewError("Please enter a comment (at least 5 characters).");
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      // Adjust endpoint as per your backend. Common endpoint: POST /api/product/:id/reviews/
+      await axios.post(
+        `${process.env.REACT_APP_API_PORT}/api/product/${id}/reviews/`,
+        {
+          rating: reviewRating,
+          comment: reviewComment.trim(),
+          // optionally include author/email if user is logged in
+        }
+      );
+      setReviewSuccess("Review submitted. Thank you!");
+      setReviewRating(0);
+      setReviewComment("");
+      // refresh product so reviews and counts update
+      await fetchProduct();
+      // switch to reviews tab to show newly added review
+      setActiveTab("reviews");
+    } catch (err) {
+      console.error("Submit review failed:", err);
+      setReviewError("Failed to submit review. Try again.");
+    } finally {
+      setSubmittingReview(false);
+      setTimeout(() => {
+        setReviewError("");
+        setReviewSuccess("");
+      }, 4000);
+    }
   };
 
   const productImages = [
@@ -84,7 +173,6 @@ const ProductDetail = () => {
     const defaultMin = 14;
     const defaultMax = 25;
 
-    // Prefer backend-provided min/max if available (common field names)
     let minDays =
       Number(product.min_delivery_days) ||
       Number(product.shipping_min_days) ||
@@ -96,17 +184,14 @@ const ProductDetail = () => {
       Number(product.lead_time_max) ||
       defaultMax;
 
-    // Ensure sensible ordering
     if (minDays > maxDays) {
       const tmp = minDays;
       minDays = maxDays;
       maxDays = tmp;
     }
 
-    // Duration string
     const duration = minDays === maxDays ? `${minDays} days` : `${minDays}-${maxDays} days`;
 
-    // Exact date range for tooltip
     const today = new Date();
     const min = new Date(today);
     min.setDate(today.getDate() + minDays);
@@ -125,6 +210,23 @@ const ProductDetail = () => {
   if (!product) return <div className="p-6">Product not found</div>;
 
   const delivery = estimateDelivery();
+
+  // helper to render stars for display (filled/unfilled)
+  const StarsDisplay = ({ value = 0 }) => (
+    <div className="flex items-center">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <svg
+          key={i}
+          className={`h-4 w-4 ${i < value ? "text-yellow-400" : "text-gray-300"}`}
+          viewBox="0 0 24 24"
+          fill={i < value ? "currentColor" : "none"}
+          stroke="currentColor"
+        >
+          <path d="M12 .587l3.668 7.431L23.4 9.75l-5.7 5.563L19.335 24 12 20.012 4.665 24l1.634-8.687L.6 9.75l7.732-1.732z" />
+        </svg>
+      ))}
+    </div>
+  );
 
   return (
     <div className="bg-gray-50">
@@ -183,7 +285,6 @@ const ProductDetail = () => {
 
               <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
                 <div>SKU: <span className="font-medium text-gray-800">{product.sku || "—"}</span></div>
-                <div>Availability: <span className="font-medium text-gray-800">{product.stock > 0 ? "In Stock" : "Out of Stock"}</span></div>
               </div>
             </div>
 
@@ -204,12 +305,8 @@ const ProductDetail = () => {
               </div>
 
               <div className="mt-4 flex items-center gap-4">
-                <div className="flex items-center text-yellow-400">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <svg key={i} className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 .587l3.668 7.431L23.4 9.75l-5.7 5.563L19.335 24 12 20.012 4.665 24l1.634-8.687L.6 9.75l7.732-1.732z" />
-                    </svg>
-                  ))}
+                <div className="flex items-center">
+                  <StarsDisplay value={Math.round(product.average_rating || 0)} />
                 </div>
                 <div className="text-sm text-gray-600">{product.reviews_count || 0} reviews</div>
                 <div className="text-sm text-gray-600">•</div>
@@ -238,7 +335,6 @@ const ProductDetail = () => {
 
                 <div>
                   <div className="text-sm text-gray-600 mb-1">Delivery</div>
-                  {/* show duration and provide exact date range on hover */}
                   <div className="text-sm font-medium" title={delivery.range}>
                     {delivery.duration}
                   </div>
@@ -274,10 +370,16 @@ const ProductDetail = () => {
                   Message
                 </a>
                 <button
-                  onClick={() => navigator.clipboard?.writeText(window.location.href)}
+                  onClick={handleShareClick}
                   className="text-sm text-gray-600 underline"
                 >
                   Share
+                </button>
+                <button
+                  onClick={handleCopyLink}
+                  className="text-sm text-gray-600 underline ml-2"
+                >
+                  {copyStatus || "Copy link"}
                 </button>
               </div>
 
@@ -382,33 +484,83 @@ const ProductDetail = () => {
                     <div>
                       <div className="mb-3">
                         <div className="flex items-center gap-2">
-                          <div className="text-2xl font-semibold">{product.average_rating || "4.6"}</div>
+                          <div className="text-2xl font-semibold">{product.average_rating || "0.0"}</div>
                           <div className="text-sm text-gray-600">{product.reviews_count || 0} reviews</div>
                         </div>
                       </div>
 
-                      {/* sample review snippet if backend provides reviews array */}
+                      {/* Review form */}
+                      <div className="p-4 bg-gray-50 rounded mb-4">
+                        <div className="text-sm font-medium mb-2">Write a review</div>
+                        <div className="flex items-center gap-2 mb-2">
+                          {Array.from({ length: 5 }).map((_, i) => {
+                            const val = i + 1;
+                            return (
+                              <button
+                                key={val}
+                                onClick={() => setReviewRating(val)}
+                                type="button"
+                                className={`p-1 ${reviewRating >= val ? "text-yellow-400" : "text-gray-300"}`}
+                                aria-label={`Rate ${val} star${val > 1 ? "s" : ""}`}
+                              >
+                                <svg className="h-6 w-6" viewBox="0 0 24 24" fill={reviewRating >= val ? "currentColor" : "none"} stroke="currentColor">
+                                  <path d="M12 .587l3.668 7.431L23.4 9.75l-5.7 5.563L19.335 24 12 20.012 4.665 24l1.634-8.687L.6 9.75l7.732-1.732z" />
+                                </svg>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <textarea
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          rows={4}
+                          placeholder="Write your review..."
+                          className="w-full p-3 border rounded mb-2 text-sm"
+                        />
+
+                        {reviewError && <div className="text-sm text-red-600 mb-2">{reviewError}</div>}
+                        {reviewSuccess && <div className="text-sm text-green-600 mb-2">{reviewSuccess}</div>}
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={submitReview}
+                            disabled={submittingReview}
+                            className="bg-[#0E6B66] text-white px-4 py-2 rounded font-medium disabled:opacity-60"
+                          >
+                            {submittingReview ? "Submitting..." : "Submit review"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setReviewRating(0);
+                              setReviewComment("");
+                              setReviewError("");
+                              setReviewSuccess("");
+                            }}
+                            className="text-sm text-gray-600 underline"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Reviews list */}
                       {product.reviews && product.reviews.length ? (
                         <div className="space-y-3">
-                          {product.reviews.slice(0, 2).map((r, idx) => (
-                            <div key={idx} className="p-3 bg-gray-50 rounded">
+                          {product.reviews.map((r, idx) => (
+                            <div key={idx} className="p-3 bg-white rounded shadow-sm">
                               <div className="flex items-start justify-between">
                                 <div>
                                   <div className="text-sm font-medium">{r.author || "Anonymous"}</div>
                                   <div className="text-xs text-gray-500">{r.date || ""}</div>
                                 </div>
                                 <div className="text-sm text-yellow-400">
-                                  {Array.from({ length: 5 }).map((_, i) => (
-                                    <svg key={i} className="h-4 w-4 inline" viewBox="0 0 24 24" fill="currentColor">
-                                      <path d="M12 .587l3.668 7.431L23.4 9.75l-5.7 5.563L19.335 24 12 20.012 4.665 24l1.634-8.687L.6 9.75l7.732-1.732z" />
-                                    </svg>
-                                  ))}
+                                  <StarsDisplay value={Number(r.rating) || 0} />
                                 </div>
                               </div>
                               <div className="mt-2 text-sm text-gray-700">{r.comment}</div>
                             </div>
                           ))}
-                          <a href="#all-reviews" className="text-sm text-[#0E6B66] underline">See all reviews</a>
                         </div>
                       ) : (
                         <p className="text-gray-500">No reviews yet. Be the first to review!</p>
@@ -442,13 +594,13 @@ const ProductDetail = () => {
 
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigator.clipboard?.writeText(window.location.href)}
+                onClick={handleCopyLink}
                 className="text-sm text-gray-600 underline"
               >
-                Copy link
+                {copyStatus || "Copy link"}
               </button>
               <a
-                href={`https://wa.me/918904088131?text=${encodeURIComponent(`Hi, I'm interested in ${product.name} - ${window.location.href}`)}`}
+                href={`https://wa.me/918904088131?text=${encodeURIComponent(`Hi, I'm interested in ${product.name} - ${getProductUrl()}`)}`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-sm text-[#0E6B66] font-medium"
@@ -457,6 +609,34 @@ const ProductDetail = () => {
               </a>
             </div>
           </div>
+        </div>
+
+        {/* show latest reviews below product (summary) */}
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-3">Latest reviews</h2>
+          {product.reviews && product.reviews.length ? (
+            <div className="space-y-3">
+              {product.reviews.slice(0, 3).map((r, i) => (
+                <div key={i} className="p-3 bg-white rounded shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-sm font-medium">{r.author || "Anonymous"}</div>
+                      <div className="text-xs text-gray-500">{r.date || ""}</div>
+                    </div>
+                    <div className="text-sm text-yellow-400">
+                      <StarsDisplay value={Number(r.rating) || 0} />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-700">{r.comment}</div>
+                </div>
+              ))}
+              <div className="mt-2">
+                <button onClick={() => setActiveTab("reviews")} className="text-sm text-[#0E6B66] underline">See all reviews & write one</button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500">No reviews yet. Be the first to review!</p>
+          )}
         </div>
 
         {/* mobile sticky CTA */}
