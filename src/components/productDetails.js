@@ -29,6 +29,11 @@ const ProductDetail = () => {
     window.scrollTo(0, 0);
   }, [id]);
 
+  // debug: verify description value coming from API
+  useEffect(() => {
+    if (product) console.debug("product.description:", product.description);
+  }, [product]);
+
   // Handle buy now click and include the selected color
   const handleBuyNowClick = () => {
     const message = `I'm interested in purchasing the following product:\n\nProduct Name: ${product?.name}\nLink:https://www.teakwoodfactory.com/product/${product?.uuid}`;
@@ -49,6 +54,23 @@ const ProductDetail = () => {
     product?.image_four,
     product?.image_five,
   ].filter(Boolean);
+
+  // Render dimensions from different possible API fields
+  const renderDimensions = () => {
+    if (!product) return null;
+    // Prefer a single dimensions field if present
+    if (product.dimensions) return product.dimensions;
+    // Support common separate fields
+    const parts = [];
+    if (product.length) parts.push(`${product.length}`);
+    if (product.width) parts.push(`${product.width}`);
+    if (product.height) parts.push(`${product.height}`);
+    if (parts.length) return parts.join(" x ");
+    // fallback to size or dimension
+    if (product.size) return product.size;
+    if (product.dimension) return product.dimension;
+    return null;
+  };
 
   if (loading) return <div>Loading...</div>;
   if (!product) return <div>Product not found</div>;
@@ -94,13 +116,7 @@ const ProductDetail = () => {
             <h1 className="text-base md:block hidden sm:text-xl capitalize font-semibold mb-2">
               {product.name}
             </h1>
-            <p className="text-gray-600 text-sm sm:text-base mb-4">
-              {product.description}
-            </p>
-            {/* <p className="text-lg font-semibold flex items-center mb-4">
-              <img src={RupeeSign} alt="Rupee" className="h-5 w-auto mr-1" />
-              {product.price}
-            </p> */}
+
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="font-semibold">Category:</p>
@@ -152,11 +168,33 @@ const ProductDetail = () => {
                 <p className="font-semibold">Features:</p>
                 <p>{product.features}</p>
               </div>
+
+              <div>
+                <p className="font-semibold">Dimensions:</p>
+                <p>{renderDimensions() || "N/A"}</p>
+              </div>
+
               <div>
                 <p className="font-semibold">Origin:</p>
                 <p>{product.country_of_origin}</p>
               </div>
             </div>
+
+            {/* Product description below features */}
+            <div className="mt-4 mb-6">
+              <h2 className="text-lg font-semibold mb-2">Product Description</h2>
+
+              {product.description ? (
+                // If the API returns HTML, render it; otherwise plain text will display as-is.
+                <div
+                  className="text-gray-700 text-sm sm:text-base whitespace-pre-line"
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
+              ) : (
+                <p className="text-gray-500">No description available.</p>
+              )}
+            </div>
+
             <div
               onClick={handleBuyNowClick}
               className="mt-8 w-[180px] mx-auto md:mx-0 text-sm flex justify-center font-medium items-center gap-2 cursor-pointer sm:text-base sm:w-[200px] bg-[#0E6B66] text-white px-4 py-[10px] rounded"
