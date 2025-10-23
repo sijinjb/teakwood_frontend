@@ -1,3 +1,4 @@
+// ...existing code...
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
@@ -7,8 +8,11 @@ const ProductDetail = () => {
   const [product, setProduct] = useState(null);
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedColor, setSelectedColor] = useState("");
-  const { id } = useParams();
+  const [activeTab, setActiveTab] = useState("overview"); // overview | specs | features
   const [loading, setLoading] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [wishlisted, setWishlisted] = useState(false);
+  const { id } = useParams();
 
   const fetchProduct = async () => {
     setLoading(true);
@@ -29,14 +33,12 @@ const ProductDetail = () => {
     window.scrollTo(0, 0);
   }, [id]);
 
-  // debug: verify description value coming from API
   useEffect(() => {
     if (product) console.debug("product.description:", product.description);
   }, [product]);
 
-  // Handle buy now click and include the selected color
   const handleBuyNowClick = () => {
-    const message = `I'm interested in purchasing the following product:\n\nProduct Name: ${product?.name}\nLink:https://www.teakwoodfactory.com/product/${product?.uuid}`;
+    const message = `I'm interested in purchasing:\n\nProduct: ${product?.name}\nQty: ${quantity}\nColor: ${selectedColor || "N/A"}\nLink: https://www.teakwoodfactory.com/product/${product?.uuid}`;
     const encodedMessage = encodeURIComponent(message);
     const phoneNumber = "918904088131";
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${phoneNumber}&text=${encodedMessage}`;
@@ -47,6 +49,11 @@ const ProductDetail = () => {
     setSelectedColor(color);
   };
 
+  const toggleWishlist = () => {
+    setWishlisted((s) => !s);
+    // Optionally: send wishlist update to backend here
+  };
+
   const productImages = [
     product?.image_one,
     product?.image_two,
@@ -55,159 +62,426 @@ const ProductDetail = () => {
     product?.image_five,
   ].filter(Boolean);
 
-  // Render dimensions from different possible API fields
   const renderDimensions = () => {
     if (!product) return null;
-    // Prefer a single dimensions field if present
     if (product.dimensions) return product.dimensions;
-    // Support common separate fields
     const parts = [];
     if (product.length) parts.push(`${product.length}`);
     if (product.width) parts.push(`${product.width}`);
     if (product.height) parts.push(`${product.height}`);
     if (parts.length) return parts.join(" x ");
-    // fallback to size or dimension
     if (product.size) return product.size;
     if (product.dimension) return product.dimension;
     return null;
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (!product) return <div>Product not found</div>;
+  // Returns { duration: '5-9 days', range: 'Oct 28 - Nov 2' }
+  const estimateDelivery = () => {
+    if (!product) {
+      return { duration: "N/A", range: "" };
+    }
+
+    const defaultMin = 14;
+    const defaultMax = 25;
+
+    // Prefer backend-provided min/max if available (common field names)
+    let minDays =
+      Number(product.min_delivery_days) ||
+      Number(product.shipping_min_days) ||
+      Number(product.lead_time_min) ||
+      defaultMin;
+    let maxDays =
+      Number(product.max_delivery_days) ||
+      Number(product.shipping_max_days) ||
+      Number(product.lead_time_max) ||
+      defaultMax;
+
+    // Ensure sensible ordering
+    if (minDays > maxDays) {
+      const tmp = minDays;
+      minDays = maxDays;
+      maxDays = tmp;
+    }
+
+    // Duration string
+    const duration = minDays === maxDays ? `${minDays} days` : `${minDays}-${maxDays} days`;
+
+    // Exact date range for tooltip
+    const today = new Date();
+    const min = new Date(today);
+    min.setDate(today.getDate() + minDays);
+    const max = new Date(today);
+    max.setDate(today.getDate() + maxDays);
+    const options = { month: "short", day: "numeric" };
+    const range = `${min.toLocaleDateString(undefined, options)} - ${max.toLocaleDateString(
+      undefined,
+      options
+    )}`;
+
+    return { duration, range };
+  };
+
+  if (loading) return <div className="p-6">Loading...</div>;
+  if (!product) return <div className="p-6">Product not found</div>;
+
+  const delivery = estimateDelivery();
 
   return (
-    <div className="bg-white">
-      <div className="mx-auto max-w-7xl pt-20 md:pt-28 lg:px-8 px-6">
-        <div className="text-2xl text-[#0E6B66] font-semibold mb-6">
-          Product Details
-        </div>
-        <div className="w-full flex flex-col md:flex-row gap-8 md:gap-12">
-        <h1 className="text-base md:hidden block sm:text-xl capitalize font-semibold ">
-              {product.name}
-            </h1>
-          <div className="md:w-[40%]">
-            <div className="h-[250px] sm:h-[350px] rounded-lg bg-[#CCCCCC] mb-4">
-              <img
-                src={
-                  productImages[selectedImage]
-                    ? `${process.env.REACT_APP_API_PORT}${productImages[selectedImage]}`
-                    : "https://plus.unsplash.com/premium_photo-1683140425081-14c44089acd0?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MjV8fGZ1cm5pdHVyZXN8ZW58MHwwfDB8fHww"
-                }
-                alt={product.name}
-                className="w-full h-full p-4 object-contain"
-              />
-            </div>
-            <div className="flex justify-center gap-2">
-              {productImages.map((img, index) => (
+    <div className="bg-gray-50">
+      <div className="mx-auto max-w-7xl pt-20 md:pt-28 lg:px-8 px-4">
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 md:p-8">
+            {/* Left: Media */}
+            <div>
+              <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-100 to-white h-[420px] md:h-[560px] flex items-center justify-center">
                 <img
-                  key={index}
-                  src={`${process.env.REACT_APP_API_PORT}${img}`}
-                  alt={`Product ${index + 1}`}
-                  className={`w-16 h-16 object-cover cursor-pointer ${
-                    selectedImage === index ? "border-2 border-blue-500" : ""
-                  }`}
-                  onClick={() => setSelectedImage(index)}
+                  src={
+                    productImages[selectedImage]
+                      ? `${process.env.REACT_APP_API_PORT}${productImages[selectedImage]}`
+                      : "https://plus.unsplash.com/premium_photo-1683140425081-14c44089acd0?w=900&auto=format&fit=crop&q=60"
+                  }
+                  alt={product.name}
+                  className="max-h-full max-w-full object-contain transform transition-transform duration-300 hover:scale-105"
                 />
-              ))}
-            </div>
-          </div>
+                <div className="absolute top-4 left-4 bg-white/95 text-xs text-gray-700 px-3 py-1 rounded-md shadow">
+                  {product.category?.name || "Product"}
+                </div>
+                <button
+                  onClick={toggleWishlist}
+                  aria-label="Add to wishlist"
+                  className={`absolute top-4 right-4 p-2 rounded-full shadow ${
+                    wishlisted ? "bg-red-50 text-red-600" : "bg-white text-gray-600"
+                  }`}
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill={wishlisted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+                    <path d="M12 21s-7.5-4.873-10-8.06C-0.4 8.93 4.372 3 12 8.5 19.628 3 24.4 8.93 22 12.94 19.5 16.127 12 21 12 21z" />
+                  </svg>
+                </button>
+              </div>
 
-          <div className="md:w-[60%] h-auto w-full">
-            <h1 className="text-base md:block hidden sm:text-xl capitalize font-semibold mb-2">
-              {product.name}
-            </h1>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="font-semibold">Category:</p>
-                <p>{product.category.name}</p>
-              </div>
-              <div>
-                <p className="font-semibold">Material:</p>
-                <p>{product.material}</p>
-              </div>
-              <div>
-                <p className="font-semibold">Brand:</p>
-                <p>{product.brand}</p>
-              </div>
-              <div className=" mt-4">
-              <p className="font-semibold">Color:</p>
-                <div className="flex mt-[2px] space-x-2">
-                  {Array.isArray(product?.color) ? (
-                    product?.color.map((color, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleColorSelect(color)}
-                        style={{ backgroundColor: color }}
-                        className={`w-4 h-4 rounded-full cursor-pointer ${
-                          selectedColor === color
-                            ? "ring-1 ring-offset-1 ring-blue-500"
-                            : ""
-                        }`}
+              <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-1">
+                {productImages.length ? (
+                  productImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedImage(idx)}
+                      className={`flex-none w-20 h-20 rounded-lg overflow-hidden border transition-shadow duration-150 ${
+                        selectedImage === idx ? "ring-2 ring-[#0E6B66] shadow" : "border-gray-200"
+                      }`}
+                    >
+                      <img
+                        src={`${process.env.REACT_APP_API_PORT}${img}`}
+                        alt={`${product.name} ${idx + 1}`}
+                        className="w-full h-full object-cover"
                       />
-                    ))
-                  ) : (
-                    <div
-                      onClick={() => handleColorSelect(product?.color)}
-                      style={{ backgroundColor: product?.color }}
-                      className="w-4 h-4 rounded-full cursor-pointer ring-1 ring-offset-1 ring-blue-500"
-                    />
-                  )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-gray-500">No images</div>
+                )}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+                <div>SKU: <span className="font-medium text-gray-800">{product.sku || "—"}</span></div>
+                <div>Availability: <span className="font-medium text-gray-800">{product.stock > 0 ? "In Stock" : "Out of Stock"}</span></div>
+              </div>
+            </div>
+
+            {/* Right: Info */}
+            <div className="flex flex-col">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-bold text-[#0E6B66]">{product.name}</h1>
+                  <p className="mt-1 text-sm text-gray-500">{product.brand ? product.brand + " • " : ""}{product.material || ""}</p>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <img src={RupeeSign} alt="Rupee" className="h-4" />
+                    <div className="text-2xl font-semibold">{product.price}</div>
+                  </div>
+                  <div className="text-xs text-gray-500">/ piece</div>
                 </div>
               </div>
 
-              <div>
-                <p className="font-semibold">Warranty:</p>
-                <p>{product.warranty} years</p>
-              </div>
-              <div>
-                <p className="font-semibold">Sold By:</p>
-                <p>{product.sold_by}</p>
-              </div>
-              <div>
-                <p className="font-semibold">Features:</p>
-                <p>{product.features}</p>
-              </div>
-
-              <div>
-                <p className="font-semibold">Dimensions:</p>
-                <p>{renderDimensions() || "N/A"}</p>
+              <div className="mt-4 flex items-center gap-4">
+                <div className="flex items-center text-yellow-400">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <svg key={i} className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 .587l3.668 7.431L23.4 9.75l-5.7 5.563L19.335 24 12 20.012 4.665 24l1.634-8.687L.6 9.75l7.732-1.732z" />
+                    </svg>
+                  ))}
+                </div>
+                <div className="text-sm text-gray-600">{product.reviews_count || 0} reviews</div>
+                <div className="text-sm text-gray-600">•</div>
+                <div className="text-sm text-gray-600">{product.warranty ? `${product.warranty} yr warranty` : "No warranty"}</div>
               </div>
 
-              <div>
-                <p className="font-semibold">Origin:</p>
-                <p>{product.country_of_origin}</p>
+              <div className="mt-6 flex items-center gap-6">
+                <div>
+                  <div className="text-sm text-gray-600 mb-1">Quantity</div>
+                  <div className="inline-flex items-center border rounded-md overflow-hidden">
+                    <button
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      className="px-3 py-2 text-gray-700"
+                    >
+                      −
+                    </button>
+                    <div className="px-4 py-2 font-medium">{quantity}</div>
+                    <button
+                      onClick={() => setQuantity((q) => q + 1)}
+                      className="px-3 py-2 text-gray-700"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm text-gray-600 mb-1">Delivery</div>
+                  {/* show duration and provide exact date range on hover */}
+                  <div className="text-sm font-medium" title={delivery.range}>
+                    {delivery.duration}
+                  </div>
+                  <div className="text-xs text-gray-500">Free delivery Around 30Kms</div>
+                </div>
+
+                <div className="ml-auto hidden md:flex items-center gap-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <svg className="h-5 w-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm-1.2 17.1L4.8 11.1l1.44-1.44 4.56 4.56 7.2-7.2L19.2 8.4 10.8 17.1z" />
+                    </svg>
+                    <div>
+                      <div className="text-xs text-gray-500">Secure payment</div>
+                      <div className="text-sm font-medium">Trusted checkout</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center gap-3">
+                <button
+                  onClick={handleBuyNowClick}
+                  className="bg-[#0E6B66] text-white px-6 py-3 rounded-lg font-semibold shadow hover:opacity-95 transition"
+                >
+                  Buy Now
+                </button>
+                <a
+                  href={`https://wa.me/918904088131?text=${encodeURIComponent(`Hi, I'm interested in ${product.name} - https://www.teakwoodfactory.com/product/${product.uuid}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="border border-gray-200 px-4 py-3 rounded-lg text-sm inline-flex items-center gap-2 hover:bg-gray-50"
+                >
+                  Message
+                </a>
+                <button
+                  onClick={() => navigator.clipboard?.writeText(window.location.href)}
+                  className="text-sm text-gray-600 underline"
+                >
+                  Share
+                </button>
+              </div>
+
+              {/* Tabs */}
+              <div className="mt-8">
+                <div className="flex gap-4 border-b border-gray-100">
+                  <button
+                    onClick={() => setActiveTab("overview")}
+                    className={`pb-3 ${activeTab === "overview" ? "text-[#0E6B66] border-b-2 border-[#0E6B66]" : "text-gray-600"}`}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("specs")}
+                    className={`pb-3 ${activeTab === "specs" ? "text-[#0E6B66] border-b-2 border-[#0E6B66]" : "text-gray-600"}`}
+                  >
+                    Specifications
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("features")}
+                    className={`pb-3 ${activeTab === "features" ? "text-[#0E6B66] border-b-2 border-[#0E6B66]" : "text-gray-600"}`}
+                  >
+                    Features
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("reviews")}
+                    className={`pb-3 ${activeTab === "reviews" ? "text-[#0E6B66] border-b-2 border-[#0E6B66]" : "text-gray-600"}`}
+                  >
+                    Reviews
+                  </button>
+                </div>
+
+                <div className="mt-4">
+                  {activeTab === "overview" && (
+                    <div className="text-gray-700 text-sm sm:text-base space-y-3">
+                      {product.description ? (
+                        <div dangerouslySetInnerHTML={{ __html: product.description }} />
+                      ) : (
+                        <p className="text-gray-500">No description available.</p>
+                      )}
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <li className="flex items-start gap-2">
+                          <span className="text-[#0E6B66] font-semibold">✓</span>
+                          <span>Handcrafted teak wood</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-[#0E6B66] font-semibold">✓</span>
+                          <span>Eco-friendly finishes</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-[#0E6B66] font-semibold">✓</span>
+                          <span>2-year warranty</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-[#0E6B66] font-semibold">✓</span>
+                          <span>Custom sizes available</span>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+
+                  {activeTab === "specs" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700">
+                      <div className="p-3 bg-gray-50 rounded">
+                        <div className="text-xs text-gray-500">Dimensions</div>
+                        <div className="font-medium">{renderDimensions() || "N/A"}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded">
+                        <div className="text-xs text-gray-500">Material</div>
+                        <div className="font-medium">{product.material || "—"}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded">
+                        <div className="text-xs text-gray-500">Brand</div>
+                        <div className="font-medium">{product.brand || "—"}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded">
+                        <div className="text-xs text-gray-500">Origin</div>
+                        <div className="font-medium">{product.country_of_origin || "—"}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded">
+                        <div className="text-xs text-gray-500">Warranty</div>
+                        <div className="font-medium">{product.warranty ? `${product.warranty} year(s)` : "—"}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded">
+                        <div className="text-xs text-gray-500">Sold By</div>
+                        <div className="font-medium">{product.sold_by || "—"}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === "features" && (
+                    <div className="text-gray-700 text-sm sm:text-base">
+                      {product.features ? (
+                        <div dangerouslySetInnerHTML={{ __html: product.features }} />
+                      ) : (
+                        <p className="text-gray-500">No features listed.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {activeTab === "reviews" && (
+                    <div>
+                      <div className="mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="text-2xl font-semibold">{product.average_rating || "4.6"}</div>
+                          <div className="text-sm text-gray-600">{product.reviews_count || 0} reviews</div>
+                        </div>
+                      </div>
+
+                      {/* sample review snippet if backend provides reviews array */}
+                      {product.reviews && product.reviews.length ? (
+                        <div className="space-y-3">
+                          {product.reviews.slice(0, 2).map((r, idx) => (
+                            <div key={idx} className="p-3 bg-gray-50 rounded">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="text-sm font-medium">{r.author || "Anonymous"}</div>
+                                  <div className="text-xs text-gray-500">{r.date || ""}</div>
+                                </div>
+                                <div className="text-sm text-yellow-400">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <svg key={i} className="h-4 w-4 inline" viewBox="0 0 24 24" fill="currentColor">
+                                      <path d="M12 .587l3.668 7.431L23.4 9.75l-5.7 5.563L19.335 24 12 20.012 4.665 24l1.634-8.687L.6 9.75l7.732-1.732z" />
+                                    </svg>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="mt-2 text-sm text-gray-700">{r.comment}</div>
+                            </div>
+                          ))}
+                          <a href="#all-reviews" className="text-sm text-[#0E6B66] underline">See all reviews</a>
+                        </div>
+                      ) : (
+                        <p className="text-gray-500">No reviews yet. Be the first to review!</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* bottom: related content / trust strip */}
+          <div className="border-t bg-gray-50 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <svg className="h-5 w-5 text-[#0E6B66]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0L15 8h9l-7 5 3 9-8-6-8 6 3-9L0 8h9z"/></svg>
+                <div>
+                  <div className="font-medium">Premium Teak</div>
+                  <div className="text-xs">Seasoned & treated</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <svg className="h-5 w-5 text-[#0E6B66]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/></svg>
+                <div>
+                  <div className="font-medium">Free assembly</div>
+                  <div className="text-xs">On select items</div>
+                </div>
               </div>
             </div>
 
-            {/* Product description below features */}
-            <div className="mt-4 mb-6">
-              <h2 className="text-lg font-semibold mb-2">Product Description</h2>
-
-              {product.description ? (
-                // If the API returns HTML, render it; otherwise plain text will display as-is.
-                <div
-                  className="text-gray-700 text-sm sm:text-base whitespace-pre-line"
-                  dangerouslySetInnerHTML={{ __html: product.description }}
-                />
-              ) : (
-                <p className="text-gray-500">No description available.</p>
-              )}
-            </div>
-
-            <div
-              onClick={handleBuyNowClick}
-              className="mt-8 w-[180px] mx-auto md:mx-0 text-sm flex justify-center font-medium items-center gap-2 cursor-pointer sm:text-base sm:w-[200px] bg-[#0E6B66] text-white px-4 py-[10px] rounded"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                fill="currentColor"
-                viewBox="0 0 24 24"
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigator.clipboard?.writeText(window.location.href)}
+                className="text-sm text-gray-600 underline"
               >
-                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
-              </svg>
-              Buy now
+                Copy link
+              </button>
+              <a
+                href={`https://wa.me/918904088131?text=${encodeURIComponent(`Hi, I'm interested in ${product.name} - ${window.location.href}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-[#0E6B66] font-medium"
+              >
+                Contact support
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* mobile sticky CTA */}
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 md:hidden w-[92%]">
+          <div className="bg-white rounded-xl shadow-lg px-4 py-3 flex items-center justify-between">
+            <div>
+              <div className="text-sm text-gray-500">From</div>
+              <div className="flex items-center gap-1">
+                <img src={RupeeSign} alt="Rupee" className="h-3" />
+                <span className="font-semibold">{product.price}</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleBuyNowClick}
+                className="bg-[#0E6B66] text-white px-4 py-2 rounded-md font-medium"
+              >
+                Buy now
+              </button>
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className="border border-gray-200 px-4 py-2 rounded-md"
+              >
+                View
+              </button>
             </div>
           </div>
         </div>
