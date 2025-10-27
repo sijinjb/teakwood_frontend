@@ -101,7 +101,8 @@ const Featured = () => {
           <div>
             <h2 className="text-3xl font-extrabold text-[#0E6B66]">Featured Products</h2>
             <p className="mt-1 text-gray-600 max-w-xl">
-              Handpicked items — curated for quality and craftsmanship. Click an image to view product details.
+              Handpicked items — curated for quality and craftsmanship.<br>
+              </br> Click an image to view product details.
             </p>
           </div>
 

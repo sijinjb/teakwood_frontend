@@ -30,6 +30,24 @@ const testimonialData = [
     rating: 5,
     reviewer: "Shruthi Karanam",
   },
+  {
+    review:
+      "Good Customer service and their products are absolutely very premium quality and unique designs.also highly recommended for those who are looking for premium Teakwood Furnitures",
+    rating: 5,
+    reviewer: "Sijin jacob",
+  },
+  {
+    review:
+      "Got a teakwood sofa from here. Very happy with the decision. Good antique design and nice service. They also allowed us to visit the factory to check for any defects or charges before delivery.",
+    rating: 5,
+    reviewer: "Abhijit Mirajkar",
+  },
+  {
+    review:
+      "We had ordered 4+1 +1 along with center table. We got it yesterday. Its beyond our expectations. Fit & Finish is excellent. Mr. Raghavendra were very attentive to our requirements. Few customization were required and they have done it. The sofa & center table has elevated our living hall to next hall. Delighted . Thanks to teakwood team",
+    rating: 5,
+    reviewer: "ramesh pom",
+  },
 ];
 
 const Star = ({ filled }) => (
