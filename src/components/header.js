@@ -166,7 +166,7 @@ export default function Header() {
                 <div className="flex items-center justify-between">
                   <a href="/" className="flex items-center gap-3">
                     <img src={Logo} alt="Teakwood" className="h-7 w-auto" />
-                    <span className="font-semibold">Teakwood</span>
+                    <span className="font-semibold"></span>
                   </a>
                   <button onClick={() => setMobileOpen(false)} className="p-2 rounded-md text-gray-700">
                     <XMarkIcon className="h-6 w-6" />
