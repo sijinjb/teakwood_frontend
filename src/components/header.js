@@ -85,7 +85,7 @@ export default function Header() {
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 h-[60px] sm:h-[68px] lg:px-8" aria-label="Global">
         <div className="flex lg:flex-1 gap-8 items-center justify-between w-full">
           <a href="/" className="flex-shrink-0 text-[white] text-lg font-semibold">
-            <span className="sr-only">Teakwood Factory</span>
+            <span className="sr-only">Teakwood Fact ory</span>
             <img className="h-5 sm:h-8 w-auto" src={Logo} alt="Logo" />
           </a>
           <div className="hidden lg:flex max-w-[300px] flex-grow">
@@ -101,7 +101,7 @@ export default function Header() {
             </a>
             <Popover className="relative">
               <Popover.Button className="flex items-center gap-x-1 text-sm font-medium leading-6 text-white outline-none">
-                Products
+                Product
                 <ChevronDownIcon className="h-5 w-5 flex-none text-gray-400" aria-hidden="true" />
               </Popover.Button>
 
