@@ -101,7 +101,7 @@ export default function Header() {
             </a>
             <Popover className="relative">
               <Popover.Button className="flex items-center gap-x-1 text-sm font-medium leading-6 text-white outline-none">
-                Product
+                Products
                 <ChevronDownIcon className="h-5 w-5 flex-none text-gray-400" aria-hidden="true" />
               </Popover.Button>
 
